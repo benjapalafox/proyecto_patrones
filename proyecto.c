@@ -92,7 +92,7 @@ int main(int argc, char** argv)
 {
 	int world_rank;
 	int world_size;
-	int save_images = DONT_SAVE_IMAGES;
+	int save_bmp_images = DONT_SAVE_IMAGES;
 	int i;
 	long int j;
 	file_t* f_images;
@@ -133,13 +133,13 @@ int main(int argc, char** argv)
 		    MPI_Send(training_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, i, 4, MPI_COMM_WORLD);
 	    }
 	    
-	    MPI_Send(&testing_list->image_count, 1, MPI_LONG, i, 0, MPI_COMM_WORLD);
-	    MPI_Send(testing_list->label, testing_list->image_count, MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD);
+	    MPI_Send(&testing_list->image_count, 1, MPI_LONG, i, 5, MPI_COMM_WORLD);
+	    MPI_Send(testing_list->label, testing_list->image_count, MPI_UNSIGNED_CHAR, i, 6, MPI_COMM_WORLD);
 	    for(j = 0; j < testing_list->image_count; j++)
 	    {
-	      MPI_Send(&testing_list->image[j]->width, 1, MPI_LONG, i, 2, MPI_COMM_WORLD);
-		    MPI_Send(&testing_list->image[j]->height, 1, MPI_LONG, i, 3, MPI_COMM_WORLD);
-		    MPI_Send(testing_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, i, 4, MPI_COMM_WORLD);
+	      MPI_Send(&testing_list->image[j]->width, 1, MPI_LONG, i, 7, MPI_COMM_WORLD);
+		    MPI_Send(&testing_list->image[j]->height, 1, MPI_LONG, i, 8, MPI_COMM_WORLD);
+		    MPI_Send(testing_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, i, 9, MPI_COMM_WORLD);
 	    }
 	  }
 	  printf("Images sent.\n");
@@ -156,14 +156,14 @@ int main(int argc, char** argv)
       MPI_Recv(training_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, 0, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
     
-    MPI_Recv(&j, 1, MPI_LONG, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&j, 1, MPI_LONG, 0, 5, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     testing_list = mnist_image_list_alloc(j);
-    MPI_Recv(testing_list->label, testing_list->image_count, MPI_UNSIGNED_CHAR, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(testing_list->label, testing_list->image_count, MPI_UNSIGNED_CHAR, 0, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     for(j = 0; j < testing_list->image_count; j++)
     {
-      MPI_Recv(&testing_list->image[j]->width, 1, MPI_LONG, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      MPI_Recv(&testing_list->image[j]->height, 1, MPI_LONG, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      MPI_Recv(testing_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, 0, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(&testing_list->image[j]->width, 1, MPI_LONG, 0, 7, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(&testing_list->image[j]->height, 1, MPI_LONG, 0, 8, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(testing_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, 0, 9, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 	}
 
