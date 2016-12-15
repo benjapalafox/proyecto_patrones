@@ -167,7 +167,7 @@ int main(int argc, char** argv)
     }
 	}
 
-	if ((world_rank == 0) && (save_images == SAVE_IMAGES))
+	if ((world_rank == 0) && (save_bmp_images == SAVE_IMAGES))
 	{
 	  printf("Saving images.\n");
 		mnist_image_list_to_bmp(training_list, MNIST_TRAINING_SET);
