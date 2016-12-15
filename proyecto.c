@@ -11,6 +11,8 @@
 #define TESTING_FILE_IMAGES   "mnist/t10k-images.idx3-ubyte"
 #define TESTING_FILE_LABELS   "mnist/t10k-labels.idx1-ubyte"
 #define RESULTS_FILE          "mnist_results.txt"
+#define SAVE_IMAGES           0
+#define DONT_SAVE_IMAGES      1
 
 #define MNIST_TRAINING_SIZE   60000
 #define MNIST_TESTING_SIZE    10000
@@ -81,16 +83,18 @@ void mnist_image_list_to_bmp(mnist_image_list_t* list, char set);
 
 double k_NN_image_distance(mnist_image_t* image_1, mnist_image_t * image_2);
 unsigned char k_NN_classifier(mnist_image_list_t* training_list, mnist_image_t* image);
-void k_NN_classifier_test(char* file_name, mnist_image_list_t* training_list, mnist_image_list_t* testing_list);
+void k_NN_classifier_test(char* file_name, mnist_image_list_t* training_list, mnist_image_list_t* testing_list, int world_rank, int world_size);
 
 /************************************* Variable Definitions **************************************/
 
 /************************************* Function Declarations *************************************/
-
 int main(int argc, char** argv)
 {
 	int world_rank;
 	int world_size;
+	int save_images = DONT_SAVE_IMAGES;
+	int i;
+	long int j;
 	file_t* f_images;
 	file_t* f_labels;
 	mnist_image_list_t* training_list;
@@ -102,38 +106,86 @@ int main(int argc, char** argv)
 
 	if (world_rank == 0)
 	{
-		printf("Loading images.\n");
+		printf("Reading images.\n");
+	
+	  f_images = file_read(TRAINING_FILE_IMAGES);
+	  f_labels = file_read(TRAINING_FILE_LABELS);
+	  training_list = mnist_image_list_get(f_images, f_labels, MNIST_TRAINING_SET);
+
+	  f_images = file_read(TESTING_FILE_IMAGES);
+	  f_labels = file_read(TESTING_FILE_LABELS);
+	  testing_list = mnist_image_list_get(f_images, f_labels, MNIST_TESTING_SET);
+	  
+	  printf("Images read.\n");
 	}
-
-	f_images = file_read(TRAINING_FILE_IMAGES);
-	f_labels = file_read(TRAINING_FILE_LABELS);
-	training_list = mnist_image_list_get(f_images, f_labels, MNIST_TRAINING_SET);
-
-	f_images = file_read(TESTING_FILE_IMAGES);
-	f_labels = file_read(TESTING_FILE_LABELS);
-	testing_list = mnist_image_list_get(f_images, f_labels, MNIST_TESTING_SET);
-
+	
 	if (world_rank == 0)
 	{
+	  printf("Sending images.\n");
+	  for(i = 1; i < world_size; i++)
+	  {
+	    MPI_Send(&training_list->image_count, 1, MPI_LONG, i, 0, MPI_COMM_WORLD);
+	    MPI_Send(training_list->label, training_list->image_count, MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD);
+	    for(j = 0; j < training_list->image_count; j++)
+	    {
+	      MPI_Send(&training_list->image[j]->width, 1, MPI_LONG, i, 2, MPI_COMM_WORLD);
+		    MPI_Send(&training_list->image[j]->height, 1, MPI_LONG, i, 3, MPI_COMM_WORLD);
+		    MPI_Send(training_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, i, 4, MPI_COMM_WORLD);
+	    }
+	    
+	    MPI_Send(&testing_list->image_count, 1, MPI_LONG, i, 0, MPI_COMM_WORLD);
+	    MPI_Send(testing_list->label, testing_list->image_count, MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD);
+	    for(j = 0; j < testing_list->image_count; j++)
+	    {
+	      MPI_Send(&testing_list->image[j]->width, 1, MPI_LONG, i, 2, MPI_COMM_WORLD);
+		    MPI_Send(&testing_list->image[j]->height, 1, MPI_LONG, i, 3, MPI_COMM_WORLD);
+		    MPI_Send(testing_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, i, 4, MPI_COMM_WORLD);
+	    }
+	  }
+	  printf("Images sent.\n");
+	}
+	else
+	{
+    MPI_Recv(&j, 1, MPI_LONG, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    training_list = mnist_image_list_alloc(j);
+    MPI_Recv(training_list->label, training_list->image_count, MPI_UNSIGNED_CHAR, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    for(j = 0; j < training_list->image_count; j++)
+    {
+      MPI_Recv(&training_list->image[j]->width, 1, MPI_LONG, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(&training_list->image[j]->height, 1, MPI_LONG, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(training_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, 0, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+    
+    MPI_Recv(&j, 1, MPI_LONG, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    testing_list = mnist_image_list_alloc(j);
+    MPI_Recv(testing_list->label, testing_list->image_count, MPI_UNSIGNED_CHAR, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    for(j = 0; j < testing_list->image_count; j++)
+    {
+      MPI_Recv(&testing_list->image[j]->width, 1, MPI_LONG, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(&testing_list->image[j]->height, 1, MPI_LONG, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(testing_list->image[j]->data, MNIST_IMAGE_SIZE, MPI_UNSIGNED_CHAR, 0, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+	}
+
+	if ((world_rank == 0) && (save_images == SAVE_IMAGES))
+	{
+	  printf("Saving images.\n");
 		mnist_image_list_to_bmp(training_list, MNIST_TRAINING_SET);
 		mnist_image_list_to_bmp(testing_list, MNIST_TESTING_SET);
-		
-		printf("Images loaded.\n");
-		printf("Classifier test started.\n");
+		printf("Images saved.\n");
 	}
 
-	k_NN_classifier_test(RESULTS_FILE, training_list, testing_list);
-
-	if (world_rank == 0)
-	{
-		printf("Classifier test finished.\n");
-		printf("Check %s file.\n", RESULTS_FILE);
-	}
+	k_NN_classifier_test(RESULTS_FILE, training_list, testing_list, world_rank, world_size);
 
 	mnist_image_list_free(testing_list);
 	mnist_image_list_free(training_list);
 
 	MPI_Finalize();
+	
+	if (world_rank == 0)
+	{
+		printf("Bye bye!\n");
+	}
 
 	return 0;
 }
@@ -749,7 +801,7 @@ unsigned char k_NN_classifier(mnist_image_list_t* training_list, mnist_image_t* 
 }
 
 /*************************************************************************************************/
-void k_NN_classifier_test(char* file_name, mnist_image_list_t* training_list, mnist_image_list_t* testing_list)
+void k_NN_classifier_test(char* file_name, mnist_image_list_t* training_list, mnist_image_list_t* testing_list, int world_rank, int world_size)
 {
 	unsigned char label;
 	char name[36];
@@ -757,19 +809,18 @@ void k_NN_classifier_test(char* file_name, mnist_image_list_t* training_list, mn
 	long int j;
 	long int interval;
 	long int k_neighbors = K_NN;
-	double errors;
-	double counter;
-	double errors_r;
-	double counter_r;
+	long int errors;
+	long int counter;
+	long int errors_r;
+	long int counter_r;
 	double error;
 	FILE *fp = NULL;
-
-	int world_rank;
-	int world_size;
-
-	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-
+	
+	if(world_rank == 0)
+	{
+	  printf("Classifier test started.\n");
+	}
+	
 	interval = testing_list->image_count / world_size;
 	j = interval * (world_rank + 1);
 
@@ -783,11 +834,11 @@ void k_NN_classifier_test(char* file_name, mnist_image_list_t* training_list, mn
 		label = k_NN_classifier(training_list, testing_list->image[i]);
 		if (label != testing_list->label[i])
 		{
-			errors += 1.0;
+			errors++;
 			sprintf(name, "errors/element_%05ld_labeled_%u.bmp", i, label);
 			mnist_image_fprintf(name, testing_list->image[i]);
 		}
-		counter += 1.0;
+		counter++;
 	}
 
 	if (world_rank == 0)
@@ -796,37 +847,39 @@ void k_NN_classifier_test(char* file_name, mnist_image_list_t* training_list, mn
 		printf("Receiving data from processes.\n");
 		for (i = 1; i < world_size; i++)
 		{
-			MPI_Recv(&errors_r, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			MPI_Recv(&counter_r, 1, MPI_DOUBLE, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Recv(&errors_r, 1, MPI_LONG, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Recv(&counter_r, 1, MPI_LONG, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 			errors += errors_r;
 			counter += counter_r;
 		}
 	}
 	else
 	{
-		MPI_Send(&errors, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
-		MPI_Send(&counter, 1, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD);
+		MPI_Send(&errors, 1, MPI_LONG, 0, 0, MPI_COMM_WORLD);
+		MPI_Send(&counter, 1, MPI_LONG, 0, 1, MPI_COMM_WORLD);
 	}
 
 	if (world_rank == 0)
 	{
-		error = 100.0 * errors / counter;
+		error = 100E0 * (double) errors / (double) counter;
 
 		fp = fopen(file_name, "a");
 		if (fp == NULL)
 		{
 			printf("Failed to print k-nearest neighbors classifier test results to file. Error opening file.\n");
 			printf("\n");
-			printf("k = %li\nImages tested = %d\nCorrectly classified images  = %d\nError rate = %f%%\n", k_neighbors, (int)counter, (int)(counter - errors), error);
+			printf("k = %li\nImages tested = %li\nCorrectly classified images  = %li\nError rate = %f%%\n", k_neighbors, counter, (counter - errors), error);
 			printf("\n");
 		}
 		else
 		{
 			fprintf(fp, "\n");
-			fprintf(fp, "k = %li\nImages tested = %d\nCorrectly classified images  = %d\nError rate = %f%%\n", k_neighbors, (int)counter, (int)(counter - errors), error);
+			fprintf(fp, "k = %li\nImages tested = %li\nCorrectly classified images  = %li\nError rate = %f%%\n", k_neighbors, counter, (counter - errors), error);
 			fprintf(fp, "/*************************************************************************************************/\n");
 			fprintf(fp, "\n");
 			fclose(fp);
 		}
+		printf("Classifier test finished.\n");
+		printf("Check %s file.\n", RESULTS_FILE);
 	}
 }
